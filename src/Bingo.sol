@@ -5,14 +5,15 @@ pragma solidity 0.8.7;
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "./chainlink/VRFv2Consumer.sol";
 
-contract Bingo {
+contract Bingo {    
+
+    VRFv2Consumer public Ramdom;
+
+    using Counters for Counters.Counter;
 
     IERC20 public USD;
-
-    RandomNumberConsumer public Ramdom;
 
     using Counters for Counters.Counter;
 
@@ -121,9 +122,10 @@ contract Bingo {
     }
 
     function getCartonsByUser(address _user)
-    external
-    view 
-    returns( uint256[] memory){
+        external
+        view
+        returns (uint256[] memory)
+    {
         return userCartons[_user];
     }
 
@@ -141,7 +143,6 @@ contract Bingo {
 
     function createAllNumberOfBingo() private onlyOwner returns (bool) {
         for (uint256 i = 1; i <= 75; i++) {
-         
             numbersOfBingo.push(i);
 
             //Numeros por letra
@@ -321,7 +322,11 @@ contract Bingo {
         return exists;
     }
 
-    function getPlayOwnerUser(address _user) external view returns (uint256[] memory) {
+    function getPlayOwnerUser(address _user)
+        external
+        view
+        returns (uint256[] memory)
+    {
         return userOwnerPlay[_user];
     }
 
@@ -423,7 +428,6 @@ contract Bingo {
         play[_idPlay].amountUSDT += valueCartonsBuy;
 
         for (uint256 i = 0; i < _cartonsNumber; i++) {
-            
             uint256 idCarton = currentIdCartons.current();
 
             PlayCartons[_idPlay].push(idCarton);
@@ -513,13 +517,11 @@ contract Bingo {
         return true;
     }
 
-    function buyCartonsPlay(
-        uint256 _idPlay,
-        uint256 _cartonsToBuy
-    ) external returns (bool) {
-
-        
-        uint256 _amount = play[_idPlay].cartonPrice * _cartonsToBuy;         
+    function buyCartonsPlay(uint256 _idPlay, uint256 _cartonsToBuy)
+        external
+        returns (bool)
+    {
+        uint256 _amount = play[_idPlay].cartonPrice * _cartonsToBuy;
 
         require(
             isPlay(_idPlay) && play[_idPlay].state == statePlay.CREATED,
@@ -556,11 +558,7 @@ contract Bingo {
             "there are no cards to buy"
         );
 
-        bool isBuyCartons = _buyCartonsPlay(
-            _idPlay,
-            _cartonsToBuy,
-            msg.sender
-        );
+        bool isBuyCartons = _buyCartonsPlay(_idPlay, _cartonsToBuy, msg.sender);
 
         return isBuyCartons;
     }
@@ -695,4 +693,3 @@ contract Bingo {
         createAllNumberOfBingo();
     }
 }
-
