@@ -2,11 +2,10 @@
 
 pragma solidity 0.8.7;
 
-import "@openzeppelin/utils/Counters.sol";
-
-import "openzeppelin/utils/String.sol";
-import "openzeppelin/token/IERC20.sol";
-import "./RandomNumberConsumer.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@chainlink/contracts/RandomNumberConsumerV2.sol";
 
 contract Bingo {
 
