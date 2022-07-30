@@ -5,17 +5,48 @@ pragma solidity 0.8.7;
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./chainlink/VRFv2Consumer.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 
-contract Bingo {    
+contract Bingo is VRFConsumerBaseV2 {
+    //Rinkeby
+    VRFCoordinatorV2Interface COORDINATOR;
 
-    VRFv2Consumer public Ramdom;
+    // Your subscription ID.
+    uint64 s_subscriptionId;
+
+    // Mainet coordinator. For other networks,
+    // see https://docs.chain.link/docs/vrf-contracts/#configurations
+    address vrfCoordinator = 0x271682DEB8C4E0901D1a1550aD2e64D568E69909;
+
+    // The gas lane to use, which specifies the maximum gas price to bump to.
+    // For a list of available gas lanes on each network,
+    // see https://docs.chain.link/docs/vrf-contracts/#configurations
+    // 200 gwei Key Hash
+    bytes32 keyHash =
+        0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef;
+
+    // Depends on the number of requested values that you want sent to the
+    // fulfillRandomWords() function. Storing each word costs about 20,000 gas,
+    // so 100,000 is a safe default for this example contract. Test and adjust
+    // this limit based on the network that you select, the size of the request,
+    // and the processing of the callback request in the fulfillRandomWords()
+    // function.
+    uint32 callbackGasLimit = 100000;
+
+    // The default is 3, but you can set this higher.
+    uint16 requestConfirmations = 3;
+
+    // For this example, retrieve 2 random values in one request.
+    // Cannot exceed VRFCoordinatorV2.MAX_NUM_WORDS.
+    uint32 numWords = 2;
+
+    uint256[] public s_randomWords;
+    uint256 public s_requestId;
 
     using Counters for Counters.Counter;
 
     IERC20 public USD;
-
-    using Counters for Counters.Counter;
 
     enum statePlay {
         CREATED,
@@ -54,25 +85,43 @@ contract Bingo {
         address userOwner;
     }
 
-    Counters.Counter private currentIdPlay;
+    Counters.Counter public currentIdPlay;
 
-    Counters.Counter private currentIdCartons;
+    Counters.Counter public currentIdCartons;
 
-    mapping(uint256 => playDetail) private play;
+    mapping(uint256 => playDetail) public play;
 
-    mapping(uint256 => uint256[]) private PlayCartons;
+    mapping(uint256 => uint256[]) public PlayCartons;
 
-    mapping(address => uint256[]) private userOwnerPlay;
+    mapping(address => uint256[]) public userOwnerPlay;
 
-    mapping(uint256 => cartonsDetail) private cartons;
+    mapping(uint256 => cartonsDetail) public cartons;
 
-    mapping(address => uint256[]) private userCartons;
+    mapping(address => uint256[]) public userCartons;
 
-    mapping(address => bool) private owner;
+    mapping(address => bool) public owner;
 
     //numeros posibles del bingo
-    uint256[] private numbersOfBingo;
-    mapping(words => uint256[]) private numbersOfBingoByWord;
+    uint256[] public numbersOfBingo;
+    mapping(words => uint256[]) public numbersOfBingoByWord;
+
+    constructor(address usd, uint64 subscriptionId)
+                VRFConsumerBaseV2(vrfCoordinator)  {
+
+        COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinator);
+        
+        s_subscriptionId = subscriptionId;
+
+        owner[msg.sender] = true;
+
+        USD = IERC20(usd);
+
+        currentIdPlay.increment();
+
+        currentIdCartons.increment();
+
+        createAllNumberOfBingo();
+    }
 
     //events
     event CreateNewPlay(address owner, uint256 idPlay, uint256 date);
@@ -109,38 +158,24 @@ contract Bingo {
         _;
     }
 
-    function isOwner(address _account) external view returns (bool) {
-        return owner[_account];
+    function requestRandomWords() private {
+        // Will revert if subscription is not set and funded.
+        s_requestId = COORDINATOR.requestRandomWords(
+            keyHash,
+            s_subscriptionId,
+            requestConfirmations,
+            callbackGasLimit,
+            numWords
+        );
     }
 
-    function getCurrentIdPLay() external view returns (uint256) {
-        return currentIdPlay.current();
+    function fulfillRandomWords(
+        uint256, /* requestId */
+        uint256[] memory randomWords
+    ) internal override {
+        s_randomWords = randomWords;
     }
-
-    function getCurrentIdCartons() external view returns (uint256) {
-        return currentIdCartons.current();
-    }
-
-    function getCartonsByUser(address _user)
-        external
-        view
-        returns (uint256[] memory)
-    {
-        return userCartons[_user];
-    }
-
-    function getPlayDetail(uint256 _idPlay)
-        external
-        view
-        returns (playDetail memory)
-    {
-        return play[_idPlay];
-    }
-
-    function getRamdonNumber() external view returns (uint256) {
-        return Ramdom.s_requestId();
-    }
-
+  
     function createAllNumberOfBingo() private onlyOwner returns (bool) {
         for (uint256 i = 1; i <= 75; i++) {
             numbersOfBingo.push(i);
@@ -166,31 +201,15 @@ contract Bingo {
         return true;
     }
 
-    // function getNumberOfWord() external view returns (uint256[] memory) {
-    //     return numbersOfBingo;
-    // }
-
-    function getIdCartonsPlay(uint256 _idPlay)
-        external
-        view
-        returns (uint256[] memory)
-    {
-        return PlayCartons[_idPlay];
-    }
+  
 
     function getNumberCartonsByWord(uint256 _idCartons, words _word)
-        internal
-        view
-        returns (uint256[] memory)
-    {
+        internal view returns (uint256[] memory) {
         return cartons[_idCartons].number[_word];
     }
 
     function getAllNumersCartons(uint256 _idCarton)
-        public
-        view
-        returns (uint256[25] memory)
-    {
+        public view returns (uint256[25] memory) {
         require(cartons[_idCarton].idCarton > 0, "the carton no existe");
 
         uint256[25] memory totalNumber;
@@ -238,18 +257,12 @@ contract Bingo {
     }
 
     function getNumbersPlayedByPlay(uint256 _idPlay)
-        public
-        view
-        returns (uint256[] memory)
-    {
+        public view returns (uint256[] memory) {
         return play[_idPlay].numbersPlayed;
     }
 
     function isUserOwnerPlay(address _account, uint256 _idPlay)
-        internal
-        view
-        returns (bool)
-    {
+        internal view returns (bool) {
         bool playReturn = false;
         if (userOwnerPlay[_account].length > 0) {
             for (uint256 i = 0; i < userOwnerPlay[_account].length; i++) {
@@ -262,9 +275,7 @@ contract Bingo {
     }
 
     function changeStatePlayToInitiated(uint256 _idPlay)
-        external
-        returns (bool)
-    {
+        onlyOwner external returns (bool){
         require(isUserOwnerPlay(msg.sender, _idPlay), "you don't own the game");
 
         require(
@@ -278,9 +289,7 @@ contract Bingo {
     }
 
     function changeStatePlayToFinalied(uint256 _idPlay)
-        external
-        returns (bool)
-    {
+        external returns (bool) {
         require(isUserOwnerPlay(msg.sender, _idPlay), "you don't own the game");
 
         require(
@@ -305,10 +314,7 @@ contract Bingo {
     }
 
     function isCartonPlay(uint256 _idPlay, uint256 _idCarton)
-        internal
-        view
-        returns (bool)
-    {
+        internal view returns (bool){
         bool exists = false;
 
         if (PlayCartons[_idPlay].length > 0) {
@@ -323,10 +329,7 @@ contract Bingo {
     }
 
     function getPlayOwnerUser(address _user)
-        external
-        view
-        returns (uint256[] memory)
-    {
+        external view returns (uint256[] memory) {
         return userOwnerPlay[_user];
     }
 
@@ -365,18 +368,15 @@ contract Bingo {
 
         userOwnerPlay[msg.sender].push(_idPlay);
 
-        currentIdPlay.increment();
-
         emit CreateNewPlay(msg.sender, _idPlay, block.timestamp);
+
+        currentIdPlay.increment();
 
         return true;
     }
 
     function removeIndexArray(uint256[] memory array, uint256 index)
-        internal
-        pure
-        returns (uint256[] memory)
-    {
+        internal pure returns (uint256[] memory) {
         uint256[] memory arrayNew = new uint256[](array.length - 1);
         for (uint256 i = 0; i < arrayNew.length; i++) {
             if (i != index && i < index) {
@@ -413,9 +413,9 @@ contract Bingo {
         address _user
     ) internal returns (bool) {
         //llamar para generar nueva cemilla
-        Ramdom.requestRandomWords();
+        requestRandomWords();
 
-        uint256 _seed = Ramdom.s_requestId();
+        uint256 _seed = s_randomWords[0];
 
         require(_seed != 0, "seed cannot be 0");
 
@@ -518,9 +518,7 @@ contract Bingo {
     }
 
     function buyCartonsPlay(uint256 _idPlay, uint256 _cartonsToBuy)
-        external
-        returns (bool)
-    {
+        external returns (bool) {
         uint256 _amount = play[_idPlay].cartonPrice * _cartonsToBuy;
 
         require(
@@ -564,9 +562,7 @@ contract Bingo {
     }
 
     function _generateWinningNumbers(uint256 _idPlay, uint256 _seed)
-        internal
-        returns (uint256)
-    {
+        internal returns (uint256) {
         uint256 randomIndex = generateNumberRamdom(
             _idPlay,
             0,
@@ -608,13 +604,13 @@ contract Bingo {
 
         //**********/
         //debemos genera una nueva clave
-        Ramdom.requestRandomWords();
+        requestRandomWords();
 
-        require(Ramdom.s_requestId() != 0, "seed cannot be 0");
+        require(s_randomWords[0] != 0, "seed cannot be 0");
 
         uint256 numberWinning = _generateWinningNumbers(
             _idPlay,
-            Ramdom.s_requestId()
+            s_randomWords[0]
         );
 
         emit GenerateWinningNumbers(_idPlay, numberWinning, block.timestamp);
@@ -623,10 +619,7 @@ contract Bingo {
     }
 
     function isfullCarton(uint256 _idPlay, uint256 _idCarton)
-        public
-        view
-        returns (bool)
-    {
+        public view returns (bool) {
         uint256[25] memory numberCarton = getAllNumersCartons(_idCarton);
 
         uint256[] memory numberPlayed = getNumbersPlayedByPlay(_idPlay);
@@ -649,9 +642,7 @@ contract Bingo {
     }
 
     function claimPrize(uint256 _idPlay, uint256 _idCarton)
-        external
-        returns (bool)
-    {
+        external returns (bool) {
         require(isPlay(_idPlay), "the id play not exists");
 
         require(
@@ -677,19 +668,5 @@ contract Bingo {
         emit ClaimPrize(_idPlay, _idCarton, msg.sender, block.timestamp);
 
         return true;
-    }
-
-    constructor(address usd, address _random) {
-        owner[msg.sender] = true;
-
-        USD = IERC20(usd);
-
-        Ramdom = RandomNumberConsumer(_random);
-
-        currentIdPlay.increment();
-
-        currentIdCartons.increment();
-
-        createAllNumberOfBingo();
     }
 }
