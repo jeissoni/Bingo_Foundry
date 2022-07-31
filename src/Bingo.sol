@@ -8,6 +8,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 
+import {console} from "forge-std/console.sol";
+
+
 contract Bingo is VRFConsumerBaseV2 {
     //Rinkeby
     VRFCoordinatorV2Interface COORDINATOR;
@@ -39,28 +42,30 @@ contract Bingo is VRFConsumerBaseV2 {
 
     // For this example, retrieve 2 random values in one request.
     // Cannot exceed VRFCoordinatorV2.MAX_NUM_WORDS.
-    uint32 numWords = 2;
+    uint32 numWords = 1;
 
-    uint256[] public s_randomWords;
+    uint256 public s_randomWords;
     uint256 public s_requestId;
 
     using Counters for Counters.Counter;
 
     IERC20 public USD;
 
-    enum statePlay {
+    enum StatePlay {
         CREATED,
         INITIATED,
         FINALIZED
     }
 
-    enum words {
+    enum Words {
         B,
         I,
         N,
         G,
         O
     }
+
+
 
     struct playDetail {
         uint256 idPlay;
@@ -71,17 +76,17 @@ contract Bingo is VRFConsumerBaseV2 {
         uint256 cartonPrice;
         uint256 startPlayDate;
         uint256 endPlayDate;
-        uint256 amountUSDT;
-        uint256[] totalNumbers;
+        uint256 amountUSDT;        
         uint256[] numbersPlayed;
+        uint256[] totalNumbers;
         address ownerPlay;
-        statePlay state;
+        StatePlay state;
     }
 
     struct cartonsDetail {
         uint256 idCarton;
         uint256 idPlay;
-        mapping(words => uint256[]) number;
+        mapping(Words => uint256[]) number;
         address userOwner;
     }
 
@@ -103,7 +108,7 @@ contract Bingo is VRFConsumerBaseV2 {
 
     //numeros posibles del bingo
     uint256[] public numbersOfBingo;
-    mapping(words => uint256[]) public numbersOfBingoByWord;
+    mapping(Words => uint256[]) public numbersOfBingoByWord;
 
     constructor(address usd, uint64 subscriptionId)
                 VRFConsumerBaseV2(vrfCoordinator)  {
@@ -158,7 +163,7 @@ contract Bingo is VRFConsumerBaseV2 {
         _;
     }
 
-    function requestRandomWords() private {
+    function requestRandomWords() public {
         // Will revert if subscription is not set and funded.
         s_requestId = COORDINATOR.requestRandomWords(
             keyHash,
@@ -173,7 +178,7 @@ contract Bingo is VRFConsumerBaseV2 {
         uint256, /* requestId */
         uint256[] memory randomWords
     ) internal override {
-        s_randomWords = randomWords;
+        s_randomWords = randomWords[0];
     }
   
     function createAllNumberOfBingo() private onlyOwner returns (bool) {
@@ -182,19 +187,19 @@ contract Bingo is VRFConsumerBaseV2 {
 
             //Numeros por letra
             if (i >= 0 && i <= 15) {
-                numbersOfBingoByWord[words.B].push(i);
+                numbersOfBingoByWord[Words.B].push(i);
             }
             if (i >= 16 && i <= 30) {
-                numbersOfBingoByWord[words.I].push(i);
+                numbersOfBingoByWord[Words.I].push(i);
             }
             if (i >= 31 && i <= 45) {
-                numbersOfBingoByWord[words.N].push(i);
+                numbersOfBingoByWord[Words.N].push(i);
             }
             if (i >= 46 && i <= 60) {
-                numbersOfBingoByWord[words.G].push(i);
+                numbersOfBingoByWord[Words.G].push(i);
             }
             if (i >= 61 && i <= 75) {
-                numbersOfBingoByWord[words.O].push(i);
+                numbersOfBingoByWord[Words.O].push(i);
             }
         }
 
@@ -203,7 +208,7 @@ contract Bingo is VRFConsumerBaseV2 {
 
   
 
-    function getNumberCartonsByWord(uint256 _idCartons, words _word)
+    function getNumberCartonsByWord(uint256 _idCartons, Words _word)
         internal view returns (uint256[] memory) {
         return cartons[_idCartons].number[_word];
     }
@@ -216,23 +221,23 @@ contract Bingo is VRFConsumerBaseV2 {
 
         uint256[] memory arrayWordB = getNumberCartonsByWord(
             _idCarton,
-            words.B
+            Words.B
         );
         uint256[] memory arrayWordI = getNumberCartonsByWord(
             _idCarton,
-            words.I
+            Words.I
         );
         uint256[] memory arrayWordN = getNumberCartonsByWord(
             _idCarton,
-            words.N
+            Words.N
         );
         uint256[] memory arrayWordG = getNumberCartonsByWord(
             _idCarton,
-            words.G
+            Words.G
         );
         uint256[] memory arrayWordO = getNumberCartonsByWord(
             _idCarton,
-            words.O
+            Words.O
         );
 
         for (uint256 i = 0; i < 25; i++) {
@@ -275,7 +280,7 @@ contract Bingo is VRFConsumerBaseV2 {
     }
 
     function changeStatePlayToInitiated(uint256 _idPlay)
-        onlyOwner external returns (bool){
+        external returns (bool){
         require(isUserOwnerPlay(msg.sender, _idPlay), "you don't own the game");
 
         require(
@@ -283,7 +288,7 @@ contract Bingo is VRFConsumerBaseV2 {
             "the end date of has already happened"
         );
 
-        play[_idPlay].state = statePlay.INITIATED;
+        play[_idPlay].state = StatePlay.INITIATED;
 
         return true;
     }
@@ -297,7 +302,7 @@ contract Bingo is VRFConsumerBaseV2 {
             "the end date of has already happened"
         );
 
-        play[_idPlay].state = statePlay.FINALIZED;
+        play[_idPlay].state = StatePlay.FINALIZED;
 
         emit ChangeStatePlayToInitiated(_idPlay, msg.sender, block.timestamp);
 
@@ -359,12 +364,12 @@ contract Bingo is VRFConsumerBaseV2 {
         play[_idPlay].cartonPrice = _cartonPrice;
         play[_idPlay].startPlayDate = block.timestamp;
         play[_idPlay].endPlayDate = _endDate;
-        play[_idPlay].state = statePlay.CREATED;
+        play[_idPlay].state = StatePlay.CREATED;
         play[_idPlay].ownerPlay = msg.sender;
         play[_idPlay].amountUSDT = 0;
         play[_idPlay].cartonsSold = 0;
 
-        play[_idPlay].totalNumbers = numbersOfBingo;
+        //play[_idPlay].totalNumbers = numbersOfBingo;
 
         userOwnerPlay[msg.sender].push(_idPlay);
 
@@ -414,8 +419,11 @@ contract Bingo is VRFConsumerBaseV2 {
     ) internal returns (bool) {
         //llamar para generar nueva cemilla
         requestRandomWords();
+        console.log(1);
+        uint256 _seed = s_randomWords;
+        console.log(2);
 
-        uint256 _seed = s_randomWords[0];
+        
 
         require(_seed != 0, "seed cannot be 0");
 
@@ -447,41 +455,41 @@ contract Bingo is VRFConsumerBaseV2 {
             for (uint256 j = 0; j < 5; j++) {
                 uint256 min;
                 uint256 max;
-                words wordCarton;
+                Words wordCarton;
 
                 //index Words B
                 if (j == 0) {
                     min = 1;
                     max = 15;
-                    wordCarton = words.B;
+                    wordCarton = Words.B;
                 }
 
                 //index Words I
                 if (j == 1) {
                     min = 16;
                     max = 30;
-                    wordCarton = words.I;
+                    wordCarton = Words.I;
                 }
 
                 //index Words N
                 if (j == 2) {
                     min = 31;
                     max = 45;
-                    wordCarton = words.N;
+                    wordCarton = Words.N;
                 }
 
                 //index Words G
                 if (j == 3) {
                     min = 46;
                     max = 60;
-                    wordCarton = words.G;
+                    wordCarton = Words.G;
                 }
 
                 //index Words O
                 if (j == 4) {
                     min = 61;
                     max = 75;
-                    wordCarton = words.O;
+                    wordCarton = Words.O;
                 }
 
                 uint256[] memory possibleNumber = numbersOfBingoByWord[
@@ -522,7 +530,7 @@ contract Bingo is VRFConsumerBaseV2 {
         uint256 _amount = play[_idPlay].cartonPrice * _cartonsToBuy;
 
         require(
-            isPlay(_idPlay) && play[_idPlay].state == statePlay.CREATED,
+            isPlay(_idPlay) && play[_idPlay].state == StatePlay.CREATED,
             "the id play not exists"
         );
 
@@ -566,7 +574,7 @@ contract Bingo is VRFConsumerBaseV2 {
         uint256 randomIndex = generateNumberRamdom(
             _idPlay,
             0,
-            play[_idPlay].totalNumbers.length,
+             play[_idPlay].totalNumbers.length,
             _seed
         );
 
@@ -588,7 +596,7 @@ contract Bingo is VRFConsumerBaseV2 {
         require(isUserOwnerPlay(msg.sender, _idPlay), "you don't own the game");
 
         require(
-            play[_idPlay].state == statePlay.INITIATED,
+            play[_idPlay].state == StatePlay.INITIATED,
             "the play is not INITIATED"
         );
 
@@ -606,11 +614,11 @@ contract Bingo is VRFConsumerBaseV2 {
         //debemos genera una nueva clave
         requestRandomWords();
 
-        require(s_randomWords[0] != 0, "seed cannot be 0");
+        require(s_randomWords != 0, "seed cannot be 0");
 
         uint256 numberWinning = _generateWinningNumbers(
             _idPlay,
-            s_randomWords[0]
+            s_randomWords
         );
 
         emit GenerateWinningNumbers(_idPlay, numberWinning, block.timestamp);
