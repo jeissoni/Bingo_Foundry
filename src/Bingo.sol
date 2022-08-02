@@ -110,10 +110,10 @@ contract Bingo is VRFConsumerBaseV2 {
     uint256[] public numbersOfBingo;
     mapping(Words => uint256[]) public numbersOfBingoByWord;
 
-    constructor(address usd, uint64 subscriptionId)
-                VRFConsumerBaseV2(vrfCoordinator)  {
+    constructor(address usd, uint64 subscriptionId, address coordinator)
+                VRFConsumerBaseV2(coordinator)  {
 
-        COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinator);
+        COORDINATOR = VRFCoordinatorV2Interface(coordinator);
         
         s_subscriptionId = subscriptionId;
 
@@ -163,21 +163,24 @@ contract Bingo is VRFConsumerBaseV2 {
         _;
     }
 
-    function requestRandomWords() public {
+    // Assumes the subscription is funded sufficiently.
+    function requestRandomWords() private {
         // Will revert if subscription is not set and funded.
         s_requestId = COORDINATOR.requestRandomWords(
-            keyHash,
-            s_subscriptionId,
-            requestConfirmations,
-            callbackGasLimit,
-            numWords
+        keyHash,
+        s_subscriptionId,
+        requestConfirmations,
+        callbackGasLimit,
+        numWords
         );
+
     }
 
     function fulfillRandomWords(
         uint256, /* requestId */
         uint256[] memory randomWords
     ) internal override {
+        console.log("hola", randomWords[0]);
         s_randomWords = randomWords[0];
     }
   
@@ -417,13 +420,11 @@ contract Bingo is VRFConsumerBaseV2 {
         uint256 _cartonsNumber,
         address _user
     ) internal returns (bool) {
+
         //llamar para generar nueva cemilla
         requestRandomWords();
-        console.log(1);
-        uint256 _seed = s_randomWords;
-        console.log(2);
 
-        
+        uint256 _seed = s_randomWords;    
 
         require(_seed != 0, "seed cannot be 0");
 

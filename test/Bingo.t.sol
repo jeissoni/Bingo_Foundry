@@ -4,7 +4,8 @@ pragma solidity 0.8.7;
 import {console} from "forge-std/console.sol";
 import "forge-std/Test.sol";
 import "../src/Bingo.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+import "../src/Mock/USDT.sol";
+import "../src/Mock/VRFCoordinatorV2Mock.sol";
 
 
 interface CheatCodes {
@@ -15,18 +16,20 @@ contract BingoTest is Test {
     
     CheatCodes cheats = CheatCodes(HEVM_ADDRESS);
 
-    VRFCoordinatorV2Interface COORDINATOR;
+    VRFCoordinatorV2Mock public vRFCoordinatorV2Mock;
+    
+    USDT public Usdt;
+
     Bingo private testBingo;
     address private owner;
     address private addr1;  
     address private addr2;   
                                    
-    address private USDT = address(0xdAC17F958D2ee523a2206206994597C13D831ec7);        
+    //address private USDT = address(0xdAC17F958D2ee523a2206206994597C13D831ec7);        
     address private USDTHolder = address(0x5671C525d378803e69e743E9cd22631cB371b77f);                                
-    address private AddressAdminVRF = address(0x66F3794178997a12779527B36a2F042e001625aF);
-    address vrfCoordinator = 0x271682DEB8C4E0901D1a1550aD2e64D568E69909;
+ 
 
-    uint64 constant private subscriptionId = 259;
+    uint64 private subscriptionId;
 
     enum words {
         B,
@@ -52,11 +55,18 @@ contract BingoTest is Test {
         addr1 = cheats.addr(1);
         addr2 = cheats.addr(2);
 
-        testBingo = new Bingo(USDT, subscriptionId);
 
-        COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinator);
+        Usdt = new USDT(100000);
 
+        Usdt.transfer(addr1, 1000e6);
 
+        vRFCoordinatorV2Mock = new VRFCoordinatorV2Mock(10**8, 10**8); //baseFee; gasPriceLink;
+        subscriptionId = vRFCoordinatorV2Mock.createSubscription();
+        vRFCoordinatorV2Mock.fundSubscription(subscriptionId, 10**23);
+
+        testBingo = new Bingo(address(Usdt), subscriptionId, address(vRFCoordinatorV2Mock));
+  
+        vRFCoordinatorV2Mock.addConsumer(subscriptionId, address(testBingo));
     }
 
     function createNewPLay() public {
@@ -126,10 +136,15 @@ contract BingoTest is Test {
     function testBuyCartonsPlay() public {
         createNewPLay();
     
-        vm.prank(AddressAdminVRF);
-        COORDINATOR.addConsumer(subscriptionId, address(testBingo));
+        // vm.prank(AddressAdminVRF);
+        // COORDINATOR.addConsumer(subscriptionId, address(testBingo));       
 
-        vm.prank(USDTHolder);
+        (uint96 balance,
+        uint64 reqCount,
+        address owner,
+        address[] memory consumers) = vRFCoordinatorV2Mock.getSubscription(1);
+        
+        vm.prank(addr1);
         bool isBuy = testBingo.buyCartonsPlay(1,1);
     }
 }
